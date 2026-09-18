@@ -1,18 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import type { Item } from "@/lib/items/types";
-
-vi.mock("@/lib/items/repository", () => ({
-  getItems: vi.fn(),
-}));
-
-import { getItems } from "@/lib/items/repository";
+import * as repository from "@/lib/items/repository";
 import { GET } from "@/app/api/items/route";
 
-const mockedGetItems = vi.mocked(getItems);
+function makeRequest(url: string) {
+  return new NextRequest(url);
+}
 
 describe("GET /api/items", () => {
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("returns 200 and an array of items", async () => {
@@ -24,9 +22,9 @@ describe("GET /api/items", () => {
         createdAt: "2024-01-01T00:00:00.000Z",
       },
     ];
-    mockedGetItems.mockReturnValue(items);
+    vi.spyOn(repository, "getItems").mockReturnValue(items);
 
-    const response = await GET();
+    const response = await GET(makeRequest("http://localhost/api/items"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -35,9 +33,9 @@ describe("GET /api/items", () => {
   });
 
   it("returns 200 and an empty array when there are no items", async () => {
-    mockedGetItems.mockReturnValue([]);
+    vi.spyOn(repository, "getItems").mockReturnValue([]);
 
-    const response = await GET();
+    const response = await GET(makeRequest("http://localhost/api/items"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -59,9 +57,9 @@ describe("GET /api/items", () => {
         createdAt: "2024-01-02T00:00:00.000Z",
       },
     ];
-    mockedGetItems.mockReturnValue(items);
+    vi.spyOn(repository, "getItems").mockReturnValue(items);
 
-    const response = await GET();
+    const response = await GET(makeRequest("http://localhost/api/items"));
     const body = await response.json();
 
     for (const item of body) {
@@ -74,5 +72,50 @@ describe("GET /api/items", () => {
         }),
       );
     }
+  });
+
+  it("passes the keyword query parameter through to getItems", async () => {
+    const spy = vi.spyOn(repository, "getItems").mockReturnValue([]);
+
+    await GET(makeRequest("http://localhost/api/items?keyword=Item"));
+
+    expect(spy).toHaveBeenCalledWith("Item");
+  });
+
+  it("calls getItems without a keyword when the query parameter is absent", async () => {
+    const spy = vi.spyOn(repository, "getItems").mockReturnValue([]);
+
+    await GET(makeRequest("http://localhost/api/items"));
+
+    expect(spy).toHaveBeenCalledWith(undefined);
+  });
+});
+
+describe("GET /api/items keyword filtering", () => {
+  it("returns only items whose name or description match the keyword, case-insensitively", async () => {
+    const response = await GET(
+      makeRequest("http://localhost/api/items?keyword=item 1"),
+    );
+    const body = await response.json();
+
+    expect(body).toEqual([
+      expect.objectContaining({ id: "1", name: "Item 1" }),
+    ]);
+  });
+
+  it("returns all items when the keyword query parameter is not specified", async () => {
+    const response = await GET(makeRequest("http://localhost/api/items"));
+    const body = await response.json();
+
+    expect(body).toHaveLength(3);
+  });
+
+  it("returns an empty array when no item matches the keyword", async () => {
+    const response = await GET(
+      makeRequest("http://localhost/api/items?keyword=nonexistent"),
+    );
+    const body = await response.json();
+
+    expect(body).toEqual([]);
   });
 });

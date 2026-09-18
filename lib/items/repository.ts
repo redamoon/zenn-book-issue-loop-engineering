@@ -21,6 +21,16 @@ const items: Item[] = [
   },
 ];
 
-export function getItems(): Item[] {
-  return items;
+export function getItems(keyword?: string): Item[] {
+  const normalized = keyword?.trim().toLowerCase();
+
+  if (!normalized) {
+    return items;
+  }
+
+  return items.filter(
+    (item) =>
+      item.name.toLowerCase().includes(normalized) ||
+      item.description.toLowerCase().includes(normalized),
+  );
 }
